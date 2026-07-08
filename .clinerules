@@ -1,0 +1,18 @@
+# jellynizer Containerization Project Rules
+
+You are an AI agent tasked with implementing the containerization of the `jellynizer` project. Follow these rules to ensure consistency and quality.
+
+## File management
+
+**STRICT MANDATORY RULE**: 
+1. **No file shall exceed 200 lines.** This is a hard constraint. If a file approaches or exceeds this limit, you MUST modularize it by breaking it down into smaller, logical files (e.g., separating styles, components, or utility functions). This rule must never be bypassed.
+2. All files must have a comment with a summary of the file at the beginning.
+
+## MCP Servers
+
+**STRICT MANDATORY RULE**: Always use an MCP server if available.
+
+
+## Confirmation
+
+**STRICT MANDATORY RULE**: After doing code changes always build a docker container image and run it. Validate the logs are ok

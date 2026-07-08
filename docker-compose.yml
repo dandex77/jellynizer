@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  jellynizer:
+    build: .
+    container_name: jellynizer
+    ports:
+      - "3000:3000"
+    environment:
+      - SOURCE_DIRS=${SOURCE_DIRS:-/data/source}
+      - DEST_MOVIES=${DEST_MOVIES:-/data/movies}
+      - DEST_SHOWS=${DEST_SHOWS:-/data/shows}
+      - RUN_AUTOMATICALLY=${RUN_AUTOMATICALLY:-false}
+      - OPERATION=${OPERATION:-move}
+    volumes:
+      - ${HOST_SOURCE_DIRS:-./test_media}:/data/source
+      - ${HOST_DEST_MOVIES:-./movies}:/data/movies
+      - ${HOST_DEST_SHOWS:-./shows}:/data/shows
+    restart: always

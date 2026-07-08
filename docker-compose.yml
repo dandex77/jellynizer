@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   jellynizer:
-    build: .
+    image: alith/jellynizer:latest
     container_name: jellynizer
     ports:
       - "3000:3000"

@@ -10,7 +10,7 @@ import PreviewSection from './components/PreviewSection'
 import ConfirmationDialog from './components/ConfirmationDialog'
 import SuccessDialog from './components/SuccessDialog'
 
-const API_BASE = 'http://localhost:3000/api'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 function App() {
   const [media, setMedia] = useState([])

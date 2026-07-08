@@ -5,17 +5,39 @@
 
 use axum::{
     extract::State,
+    response::sse::{Event, Sse},
     routing::{get, post},
     Json, Router,
 };
+use futures::stream::{Stream, StreamExt};
 use crate::models::MediaFile;
 use crate::scanner;
 use crate::organizer::{self, FileMove, Operation};
 use crate::metadata::MetadataClient;
 use std::sync::{Arc, RwLock};
+use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::broadcast;
 use tracing::info;
+
+/// Status of the organization process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum OrganizeStatus {
+    Idle,
+    Running,
+    Completed,
+    Failed,
+}
+
+/// Progress information for the organization process.
+#[derive(Debug, Clone, Serialize)]
+pub struct OrganizeProgress {
+    pub status: OrganizeStatus,
+    pub current: usize,
+    pub total: usize,
+    pub current_file: Option<String>,
+}
 
 /// Shared application state for the API.
 pub struct AppState {
@@ -31,6 +53,10 @@ pub struct AppState {
     pub run_automatically: bool,
     /// The operation to perform (move or copy).
     pub operation: Operation,
+    /// The current progress of the organization process.
+    pub organize_progress: RwLock<OrganizeProgress>,
+    /// Broadcast channel for organization progress updates.
+    pub organize_tx: broadcast::Sender<OrganizeProgress>,
 }
 
 /// Router configuration for the Jellynizer API.
@@ -39,6 +65,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/scan", post(trigger_scan))
         .route("/preview", get(get_preview))
         .route("/execute", post(execute_organize))
+        .route("/organize-status", get(get_organize_status))
+        .route("/organize-events", get(organize_events))
         .route("/media", get(get_media))
         .route("/status", get(get_status))
         .with_state(state)
@@ -49,7 +77,7 @@ async fn get_preview(
     State(state): State<Arc<AppState>>,
 ) -> Json<Vec<FileMove>> {
     let files = state.discovered_files.read().unwrap();
-    let moves = organizer::organize_files(&files, &state.destination_dirs, state.operation, true);
+    let moves = organizer::organize_files(&files, &state.destination_dirs, state.operation, true, |_, _, _| {});
     Json(moves)
 }
 
@@ -58,11 +86,55 @@ async fn execute_organize(
     State(state): State<Arc<AppState>>,
 ) -> Json<serde_json::Value> {
     let files = state.discovered_files.read().unwrap();
-    let moves = organizer::organize_files(&files, &state.destination_dirs, state.operation, false);
-    
+    let moves_count = files.len(); // This is just an estimate before we start
+
+    // Initialize progress state
+    {
+        let mut progress = state.organize_progress.write().unwrap();
+        *progress = OrganizeProgress {
+            status: OrganizeStatus::Running,
+            current: 0,
+            total: moves_count,
+            current_file: None,
+        };
+    }
+
+    let state_clone = Arc::clone(&state);
+    let files_clone = files.clone();
+    let dest_dirs_clone = state.destination_dirs.clone();
+    let operation_clone = state.operation;
+
+    let tx = state.organize_tx.clone();
+
+    tokio::spawn(async move {
+        let files_to_organize = files_clone;
+        let dest_dirs = dest_dirs_clone;
+        let operation = operation_clone;
+
+        let moves = organizer::organize_files(
+            &files_to_organize,
+            &dest_dirs,
+            operation,
+            false,
+            |current, total, file_path| {
+                let mut progress = state_clone.organize_progress.write().unwrap();
+                progress.current = current;
+                progress.total = total;
+                progress.current_file = Some(file_path.to_string_lossy().into_owned());
+                
+                // Send update through broadcast channel
+                let _ = tx.send(progress.clone());
+            },
+        );
+
+        let mut progress = state_clone.organize_progress.write().unwrap();
+        progress.status = OrganizeStatus::Completed;
+        let _ = tx.send(progress.clone());
+    });
+
     Json(serde_json::json!({
         "status": "success",
-        "moved_count": moves.len()
+        "message": "Organization initiated"
     }))
 }
 
@@ -120,6 +192,7 @@ async fn trigger_scan(
                     &state_clone.destination_dirs,
                     state_clone.operation,
                     false,
+                    |_, _, _| {},
                 );
                 info!("Automatic organization completed. {} files processed.", moves.len());
 
@@ -160,4 +233,27 @@ async fn get_status(
         "source_dirs": source_dirs_str,
         "destination_dirs": dest_dirs_str
     }))
+}
+
+/// Endpoint to get the current organization progress.
+async fn get_organize_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<OrganizeProgress> {
+    let progress = state.organize_progress.read().unwrap();
+    Json(progress.clone())
+}
+
+/// SSE endpoint to stream organization progress events.
+async fn organize_events(
+    State(state): State<Arc<AppState>>,
+) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
+    let mut rx = state.organize_tx.subscribe();
+
+    let stream = async_stream::stream! {
+        while let Ok(progress) = rx.recv().await {
+            yield Ok(Event::default().json_data(progress).unwrap());
+        }
+    };
+
+    Sse::new(stream)
 }

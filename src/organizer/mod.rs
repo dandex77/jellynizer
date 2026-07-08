@@ -28,7 +28,12 @@ pub async fn classify_media<P: MetadataProvider>(media_file: &mut MediaFile, pro
         
         // If title is empty from regex, try to inherit from parent directory
         if media_file.title.as_ref().map_or(true, |t| t.is_empty()) {
-            media_file.title = extract_title_from_parent(&media_file.path);
+            if let Some((title, year)) = extract_title_from_parent(&media_file.path) {
+                media_file.title = Some(title);
+                if year.is_some() {
+                    media_file.year = year;
+                }
+            }
         }
 
         // 2. Enrich with metadata provider
@@ -46,7 +51,12 @@ pub async fn classify_media<P: MetadataProvider>(media_file: &mut MediaFile, pro
 
         // If title is empty from regex, try to inherit from parent directory
         if media_file.title.as_ref().map_or(true, |t| t.is_empty()) {
-            media_file.title = extract_title_from_parent(&media_file.path);
+            if let Some((title, year)) = extract_title_from_parent(&media_file.path) {
+                media_file.title = Some(title);
+                if year.is_some() {
+                    media_file.year = year;
+                }
+            }
         }
 
         // 2. Enrich with metadata provider
@@ -57,8 +67,9 @@ pub async fn classify_media<P: MetadataProvider>(media_file: &mut MediaFile, pro
     }
 
     // 3. Fallback: Try to extract info from parent directory name if filename is just technical garbage
-    if let Some(parent_title) = extract_title_from_parent(&media_file.path) {
+    if let Some((parent_title, parent_year)) = extract_title_from_parent(&media_file.path) {
         media_file.title = Some(parent_title);
+        media_file.year = parent_year;
         // If we found a title in parent, we might still be "Unknown" until we can distinguish type,
         // but we at least have a title.
         info!("Found title from parent directory: {:?} -> {:?}", media_file.path, media_file.title);
@@ -89,15 +100,18 @@ pub struct FileMove {
 
 /// Organizes media files into the Jellyfin-compliant structure.
 /// If `dry_run` is true, it only calculates the moves without performing them.
-pub fn organize_files(
+pub fn organize_files<F>(
     media_files: &[MediaFile], 
     destination_map: &std::collections::HashMap<String, PathBuf>, 
     operation: Operation,
-    dry_run: bool
-) -> Vec<FileMove> {
+    dry_run: bool,
+    on_progress: F
+) -> Vec<FileMove> 
+where F: Fn(usize, usize, &PathBuf) {
     let mut moves = Vec::new();
 
-    for file in media_files {
+    for (index, file) in media_files.iter().enumerate() {
+        on_progress(index + 1, media_files.len(), &file.path);
         if let Some((dest_path, base_dir)) = calculate_destination(file, destination_map) {
             // 1. Handle the primary media file
             if file.path != dest_path {

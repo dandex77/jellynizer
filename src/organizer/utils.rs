@@ -10,8 +10,9 @@ lazy_static::lazy_static! {
     /// - "Show Name - S01E01 - Title"
     /// - "Show.Name.S01E01.Title"
     /// - "Show Name S01E01 Title"
+    /// - "Show Name (2019) S01E01 Title"
     pub static ref TV_SHOW_RE: Regex = Regex::new(
-        r"(?P<title>[^()]+?)[ \s._-]+S(?P<season>\d{2})E(?P<episode>\d{2})[\s._-]*(?P<ep_title>.*)"
+        r"(?P<title>[^()]+?)(?:[ \s._-]+(?:\(?(?P<year>(?:19|20)\d{2})\)?)?)?[ \s._-]+S(?P<season>\d{2})E(?P<episode>\d{2})[\s._-]*(?P<ep_title>.*)"
     ).unwrap();
 
     /// Robust Movie pattern. Handles:
@@ -31,20 +32,29 @@ pub fn clean_name(name: &str) -> String {
     parts.join(" ")
 }
 
-/// Attempts to extract a meaningful title from the parent directory name.
-/// Useful for cases like: "The Capture (2019) Season 1 S01 (1080p...)"
-pub fn extract_title_from_parent(path: &Path) -> Option<String> {
+/// Attempts to extract a meaningful title and optional year from the parent directory name.
+/// Useful for cases like: "Show Name (Year) Season 1 S01 (1080p...)"
+pub fn extract_title_from_parent(path: &Path) -> Option<(String, Option<u32>)> {
     let parent = path.parent()?;
     let parent_name = parent.file_name()?.to_str()?;
     
-    // Try to find a pattern in the parent name, e.g., "Show Name (Year)"
-    if let Some(caps) = MOVIE_RE.captures(parent_name) {
-        return caps.name("title").map(|m| clean_name(m.as_str()));
+    // Try to find a pattern in the parent name, e.g. "Show Name (Year)"
+    // We look for a 4-digit year in the string and take everything before it as the title.
+    let year_re = Regex::new(r"(?:19|20)\d{2}").unwrap();
+    
+    if let Some(mat) = year_re.find(parent_name) {
+        let year = mat.as_str().parse::<u32>().ok();
+        // The title is everything before the year, cleaned up, stripping trailing parentheses
+        let title_part = parent_name[..mat.start()].trim_end_matches(|c: char| c == '(' || c == ' ' || c == '.' || c == '_');
+        let title = clean_name(title_part);
+        if !title.is_empty() {
+            return Some((title, year));
+        }
     }
     
     // Fallback: Just return the cleaned parent name
     if !parent_name.is_empty() {
-        Some(clean_name(parent_name))
+        Some((clean_name(parent_name), None))
     } else {
         None
     }

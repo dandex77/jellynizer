@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   jellynizer:
-    image: alith/jellynizer:latest
+    build: .
     container_name: jellynizer
     ports:
       - "3000:3000"
@@ -11,7 +11,7 @@ services:
       - DEST_MOVIES=${DEST_MOVIES:-/data/movies}
       - DEST_SHOWS=${DEST_SHOWS:-/data/shows}
       - RUN_AUTOMATICALLY=${RUN_AUTOMATICALLY:-false}
-      - OPERATION=${OPERATION:-move}
+      - OPERATION=${OPERATION:-copy}
     volumes:
       - ${HOST_SOURCE_DIRS:-./test_media}:/data/source
       - ${HOST_DEST_MOVIES:-./movies}:/data/movies

@@ -114,20 +114,26 @@ impl MetadataClient {
     }
 
     fn apply_tmdb_result(&self, media_file: &mut MediaFile, result: TmdbResult) {
-        if let Some(new_title) = result.title.clone().or(result.name.clone()) {
-            media_file.title = Some(new_title);
+        // Only update title if it's not already set or if it's empty
+        if media_file.title.as_ref().map_or(true, |t| t.is_empty()) {
+            if let Some(new_title) = result.title.clone().or(result.name.clone()) {
+                media_file.title = Some(new_title);
+            }
         }
 
-        let date_str = match media_file.media_type {
-            MediaType::Movie => result.release_date.clone(),
-            MediaType::TvShow => result.first_air_date.clone(),
-            _ => None,
-        };
+        // Only update year if it's not already set
+        if media_file.year.is_none() {
+            let date_str = match media_file.media_type {
+                MediaType::Movie => result.release_date.clone(),
+                MediaType::TvShow => result.first_air_date.clone(),
+                _ => None,
+            };
 
-        if let Some(date) = date_str {
-            if let Some(year_str) = date.split('-').next() {
-                if let Ok(year) = year_str.parse::<u32>() {
-                    media_file.year = Some(year);
+            if let Some(date) = date_str {
+                if let Some(year_str) = date.split('-').next() {
+                    if let Ok(year) = year_str.parse::<u32>() {
+                        media_file.year = Some(year);
+                    }
                 }
             }
         }
@@ -137,15 +143,6 @@ impl MetadataClient {
     /// Fallback enrichment: uses a simulated search/scraping approach.
     async fn enrich_via_search(&self, media_file: &mut MediaFile) -> Result<(), Box<dyn Error>> {
         info!("Attempting search-based enrichment for: {:?}", media_file.title);
-        
-        if media_file.title.is_some() {
-             if media_file.year.is_none() {
-                media_file.year = Some(2024); 
-                info!("Search-based enrichment: Found year 2024 for {:?}", media_file.title);
-             }
-             return Ok(());
-        }
-
         Ok(())
     }
 }

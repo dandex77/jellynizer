@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-stream = "0.3.6"
 async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["json"] }
+futures = "0.3.32"
 lazy_static = "1.5.0"
 regex = "1.12.4"
 reqwest = { version = "0.13.4", features = ["json"] }

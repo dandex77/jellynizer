@@ -4,10 +4,15 @@
 import React, { useState } from 'react';
 import ConfirmationDialog from './ConfirmationDialog';
 
-const PreviewSection = ({ previewMoves, isProcessing, onExecute }) => {
+const PreviewSection = ({ previewMoves, isProcessing, onExecute, organizeProgress }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   if (previewMoves.length === 0) return null;
+
+  const showProgress = isProcessing && organizeProgress?.status === 'Running';
+  const progressPercentage = organizeProgress?.total > 0 
+    ? Math.round((organizeProgress.current / organizeProgress.total) * 100) 
+    : 0;
 
   return (
     <>
@@ -25,22 +30,42 @@ const PreviewSection = ({ previewMoves, isProcessing, onExecute }) => {
               Review the reorganization plan before applying.
             </p>
           </div>
-          <button
-            onClick={() => setIsDialogOpen(true)}
-            disabled={isProcessing}
-            className={`btn-primary-purple w-full lg:w-auto min-w-[200px] ${
-              isProcessing ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isProcessing ? (
-              <>
-                <span className="animate-spin inline-block text-lg">⏳</span>
-                <span>Executing...</span>
-              </>
+          <div className="w-full lg:w-auto">
+            {showProgress ? (
+              <div className="space-y-3 w-full lg:w-64">
+                <div className="flex justify-between text-xs text-purple-400 font-mono">
+                  <span>{progressPercentage}%</span>
+                  <span>{organizeProgress.current} / {organizeProgress.total}</span>
+                </div>
+                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-purple-500 transition-all duration-300 ease-out"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 truncate font-mono">
+                  {organizeProgress.current_file || 'Processing...'}
+                </p>
+              </div>
             ) : (
-              'Confirm & Execute'
+              <button
+                onClick={() => setIsDialogOpen(true)}
+                disabled={isProcessing}
+                className={`btn-primary-purple w-full lg:w-auto min-w-[200px] ${
+                  isProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isProcessing ? (
+                  <>
+                    <span className="animate-spin inline-block text-lg">⏳</span>
+                    <span>Executing...</span>
+                  </>
+                ) : (
+                  'Confirm & Execute'
+                )}
+              </button>
             )}
-          </button>
+          </div>
         </div>
 
         <div className="relative px-8 pb-8 space-y-4">

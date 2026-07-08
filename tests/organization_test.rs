@@ -101,6 +101,7 @@ async fn test_the_capture_organization() {
         &destination_map,
         jellynizer::organizer::Operation::Move,
         true,
+        |_, _, _| {},
     );
 
     // Verify the destination paths for the new structure

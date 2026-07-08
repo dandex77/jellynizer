@@ -66,6 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- API MODE LOGIC ---
 
     tracing::info!("Starting API Server on http://0.0.0.0:3000");
+    let (organize_tx, _) = tokio::sync::broadcast::channel(100);
     let shared_state = Arc::new(api::AppState {
         source_dirs,
         destination_dirs,
@@ -73,6 +74,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         is_scanning: std::sync::atomic::AtomicBool::new(false),
         run_automatically,
         operation,
+        organize_progress: std::sync::RwLock::new(api::OrganizeProgress {
+            status: api::OrganizeStatus::Idle,
+            current: 0,
+            total: 0,
+            current_file: None,
+        }),
+        organize_tx,
     });
 
     let api_router = api::create_router(shared_state);

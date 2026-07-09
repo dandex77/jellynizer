@@ -1,13 +1,76 @@
 /**
  * PreviewSection component to display proposed file organization changes.
+ * Features: Grouped organization, collapsible sections, and group selection.
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ConfirmationDialog from './ConfirmationDialog';
+import PreviewGroup from './PreviewGroup';
 
-const PreviewSection = ({ previewMoves, isProcessing, onExecute, organizeProgress }) => {
+const PreviewSection = ({ 
+  previewMoves, 
+  selectedPaths, 
+  onToggleSelect, 
+  onSelectAll, 
+  onToggleGroupSelect,
+  isProcessing, 
+  onExecute, 
+  organizeProgress 
+}) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({}); // Key: title or title-season
+  const [filter, setFilter] = useState('all'); // 'all', 'movies', 'shows'
+
+  // Filtering logic
+  const filteredMoves = useMemo(() => {
+    return previewMoves.filter(move => {
+      if (filter === 'movies') return move.media_type === 'Movie';
+      if (filter === 'shows') return move.media_type === 'TvShow';
+      return true;
+    });
+  }, [previewMoves, filter]);
+
+  // Grouping logic
+  const groupedMoves = useMemo(() => {
+    const groups = {};
+
+    filteredMoves.forEach(move => {
+      const title = move.title || 'Unknown Title';
+      const season = move.media_type === 'TvShow' ? move.season : null;
+
+      if (!groups[title]) {
+        groups[title] = {
+          title,
+          media_type: move.media_type,
+          seasons: {}
+        };
+      }
+
+      const seasonKey = season !== null ? `Season ${String(season).padStart(2, '0')}` : 'Movie/Show';
+      if (!groups[title].seasons[seasonKey]) {
+        groups[title].seasons[seasonKey] = [];
+      }
+      groups[title].seasons[seasonKey].push(move);
+    });
+
+    return Object.values(groups);
+  }, [filteredMoves]);
 
   if (previewMoves.length === 0) return null;
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }));
+  };
+
+  const isAllSelected = previewMoves.length > 0 && selectedPaths.size === previewMoves.length;
+
+  const handleSelectAll = (e) => {
+    onSelectAll(e.target.checked);
+  };
+
+  const getSelectedCount = () => selectedPaths.size;
 
   const showProgress = isProcessing && organizeProgress?.status === 'Running';
   const progressPercentage = organizeProgress?.total > 0 
@@ -29,88 +92,121 @@ const PreviewSection = ({ previewMoves, isProcessing, onExecute, organizeProgres
             <p className="text-gray-400 text-base mt-2">
               Review the reorganization plan before applying.
             </p>
-          </div>
-          <div className="w-full lg:w-auto">
-            {showProgress ? (
-              <div className="space-y-3 w-full lg:w-64">
-                <div className="flex justify-between text-xs text-purple-400 font-mono">
-                  <span>{progressPercentage}%</span>
-                  <span>{organizeProgress.current} / {organizeProgress.total}</span>
-                </div>
-                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-purple-500 transition-all duration-300 ease-out"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-gray-500 truncate font-mono">
-                  {organizeProgress.current_file || 'Processing...'}
-                </p>
+
+            <div className="mt-6 flex items-center gap-2 justify-center lg:justify-start">
+              <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    filter === 'all' 
+                    ? 'bg-purple-600 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilter('movies')}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    filter === 'movies' 
+                    ? 'bg-purple-600 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Movies
+                </button>
+                <button
+                  onClick={() => setFilter('shows')}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    filter === 'shows' 
+                    ? 'bg-purple-600 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Shows
+                </button>
               </div>
-            ) : (
-              <button
-                onClick={() => setIsDialogOpen(true)}
+            </div>
+          </div>
+          <div className="w-full lg:w-auto flex flex-col items-center lg:items-end gap-6">
+            <div className="w-full lg:w-auto">
+              {showProgress ? (
+                <div className="space-y-3 w-full lg:w-64">
+                  <div className="flex justify-between text-xs text-purple-400 font-mono">
+                    <span>{progressPercentage}%</span>
+                    <span>{organizeProgress.current} / {organizeProgress.total}</span>
+                  </div>
+                  <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-purple-500 transition-all duration-300 ease-out"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate font-mono">
+                    {organizeProgress.current_file || 'Processing...'}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsDialogOpen(true)}
+                  disabled={isProcessing || selectedPaths.size === 0}
+                  className={`btn-primary-purple w-full lg:w-auto min-w-[200px] ${
+                    isProcessing || selectedPaths.size === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isProcessing ? (
+                    <>
+                      <span className="animate-spin inline-block text-lg">⏳</span>
+                      <span>Executing...</span>
+                    </>
+                  ) : (
+                    'Confirm & Execute'
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <input 
+                type="checkbox" 
+                id="select-all"
+                checked={isAllSelected}
+                onChange={handleSelectAll}
+                className="w-4 h-4 rounded border-white/10 bg-white/5 text-purple-500 focus:ring-purple-500 focus:ring-offset-0 cursor-pointer"
                 disabled={isProcessing}
-                className={`btn-primary-purple w-full lg:w-auto min-w-[200px] ${
-                  isProcessing ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isProcessing ? (
-                  <>
-                    <span className="animate-spin inline-block text-lg">⏳</span>
-                    <span>Executing...</span>
-                  </>
-                ) : (
-                  'Confirm & Execute'
-                )}
-              </button>
-            )}
+              />
+              <label htmlFor="select-all" className="cursor-pointer select-none">Select All</label>
+            </div>
           </div>
         </div>
 
         <div className="relative px-8 pb-8 space-y-4">
-          <div className="grid gap-4">
-            {previewMoves.map((move, idx) => (
-              <div 
-                key={idx} 
-                className="flex items-center gap-4 text-sm bg-white/5 p-4 rounded-xl border border-white/5 hover:border-purple-500/30 hover:bg-white/10 transition-all duration-300 group"
-              >
-                <span className="text-purple-500/50 font-mono text-xs min-w-[24px]">
-                  {String(idx + 1).padStart(2, '0')}
-                </span>
-                <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <p className="text-blue-400 truncate font-mono text-xs sm:text-sm group-hover:text-blue-300">
-                    {move.source.split(/[/\\]/).pop()}
-                  </p>
-                 <div className="flex items-center gap-2">
-                   <span className="text-purple-500/40 text-xs">➞</span>
-                   <div className="flex flex-col min-w-0">
-                     <p className="text-emerald-400 truncate font-mono text-xs sm:text-sm group-hover:text-emerald-300">
-                       {move.destination.split(/[/\\]/).pop()}
-                     </p>
-                     <div className="flex flex-wrap gap-1 mt-1">
-                       {move.identifiers && Object.entries(move.identifiers).map(([provider, id]) => (
-                         <span 
-                           key={provider} 
-                           className="text-[8px] px-1 py-0 rounded bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20 font-mono"
-                         >
-                           {provider.toUpperCase()}:{id}
-                         </span>
-                       ))}
-                     </div>
-                     <p className="text-gray-500 text-[10px] truncate font-mono">
-                       {move.relative_destination.split(/[/\\]/).join('/')}
-                     </p>
-                   </div>
-                 </div>
-                </div>
-              </div>
-            ))}
+          <div className="space-y-6">
+            {groupedMoves.map((group) => {
+              const groupPaths = filteredMoves
+                .filter(m => m.title === group.title)
+                .map(m => m.source.replace(/\\/g, '/'));
+
+              return (
+                <PreviewGroup
+                  key={group.title}
+                  title={group.title}
+                  seasons={group.seasons}
+                  selectedPaths={selectedPaths}
+                  onToggleSelect={onToggleSelect}
+                  onToggleGroupSelect={onToggleGroupSelect}
+                  isExpanded={expandedGroups[group.title]}
+                  onToggleExpand={toggleGroup}
+                  isProcessing={isProcessing}
+                  groupPaths={groupPaths}
+                  expandedGroups={expandedGroups}
+                />
+              );
+            })}
           </div>
           
           <div className="pt-6 mt-6 border-t border-white/5 text-center">
             <p className="text-gray-400 font-medium text-lg">
-              Ready to organize <span className="text-purple-400 font-bold">{previewMoves.length}</span> files.
+              Ready to organize <span className="text-purple-400 font-bold">{selectedPaths.size}</span> files.
             </p>
           </div>
         </div>
@@ -119,7 +215,7 @@ const PreviewSection = ({ previewMoves, isProcessing, onExecute, organizeProgres
       <ConfirmationDialog
         isOpen={isDialogOpen}
         title="Confirm Organization"
-        message={`Are you sure you want to reorganize ${previewMoves.length} files? This action will move files to their new locations.`}
+        message={`Are you sure you want to reorganize ${getSelectedCount()} files? This action will move files to their new locations.`}
         onConfirm={async () => {
           setIsDialogOpen(false);
           await onExecute();

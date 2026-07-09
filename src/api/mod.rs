@@ -81,12 +81,37 @@ async fn get_preview(
     Json(moves)
 }
 
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct ExecuteOrganizeRequest {
+    sources: Vec<String>,
+}
+
 /// Endpoint to execute the proposed organization changes.
 async fn execute_organize(
     State(state): State<Arc<AppState>>,
+    Json(payload): Json<ExecuteOrganizeRequest>,
 ) -> Json<serde_json::Value> {
-    let files = state.discovered_files.read().unwrap();
-    let moves_count = files.len(); // This is just an estimate before we start
+    let files_to_organize_paths = payload.sources;
+    
+    // We need to find the MediaFile objects that match these paths from the discovered_files
+    let files_to_organize: Vec<MediaFile> = {
+        let discovered = state.discovered_files.read().unwrap();
+        discovered.iter()
+            .filter(|f| files_to_organize_paths.contains(&f.path.to_string_lossy().into_owned()))
+            .cloned()
+            .collect()
+    };
+
+    if files_to_organize.is_empty() {
+        return Json(serde_json::json!({
+            "status": "error",
+            "message": "No valid files selected for organization"
+        }));
+    }
+
+    let moves_count = files_to_organize.len();
 
     // Initialize progress state
     {
@@ -100,21 +125,15 @@ async fn execute_organize(
     }
 
     let state_clone = Arc::clone(&state);
-    let files_clone = files.clone();
     let dest_dirs_clone = state.destination_dirs.clone();
     let operation_clone = state.operation;
-
     let tx = state.organize_tx.clone();
 
     tokio::spawn(async move {
-        let files_to_organize = files_clone;
-        let dest_dirs = dest_dirs_clone;
-        let operation = operation_clone;
-
         let moves = organizer::organize_files(
             &files_to_organize,
-            &dest_dirs,
-            operation,
+            &dest_dirs_clone,
+            operation_clone,
             false,
             |current, total, file_path| {
                 let mut progress = state_clone.organize_progress.write().unwrap();
@@ -122,7 +141,6 @@ async fn execute_organize(
                 progress.total = total;
                 progress.current_file = Some(file_path.to_string_lossy().into_owned());
                 
-                // Send update through broadcast channel
                 let _ = tx.send(progress.clone());
             },
         );

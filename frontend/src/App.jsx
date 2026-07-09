@@ -18,8 +18,9 @@ function App() {
    const [isScanning, setIsScanning] = useState(false)
    const [isProcessing, setIsProcessing] = useState(false)
    const [isOrganizing, setIsOrganizing] = useState(false)
-   const [previewMoves, setPreviewMoves] = useState([])
-   const [organizeProgress, setOrganizeProgress] = useState({
+    const [previewMoves, setPreviewMoves] = useState([])
+    const [selectedPaths, setSelectedPaths] = useState(new Set())
+    const [organizeProgress, setOrganizeProgress] = useState({
      status: 'Idle',
      current: 0,
      total: 0,
@@ -134,9 +135,11 @@ function App() {
         setOrganizeProgress(prev => ({ ...prev, status: 'Running' }))
         
         // 1. Start the process
-        const response = await axios.post(`${API_BASE}/execute`)
-       
-       if (response.data.status === 'success') {
+        const response = await axios.post(`${API_BASE}/execute`, {
+          sources: Array.from(selectedPaths)
+        })
+        
+        if (response.data.status === 'success') {
          // 2. Setup SSE to listen for progress
          const eventSource = new EventSource(`${API_BASE}/organize-events`)
          
@@ -218,12 +221,40 @@ function App() {
           </div>
         )}
 
-         <PreviewSection 
-           previewMoves={previewMoves} 
-           isProcessing={isProcessing} 
-           onExecute={executeOrganize} 
-           organizeProgress={organizeProgress}
-         />
+          <PreviewSection 
+            previewMoves={previewMoves} 
+            selectedPaths={selectedPaths}
+            onToggleSelect={(path) => {
+              const newSelection = new Set(selectedPaths)
+              if (newSelection.has(path)) {
+                newSelection.delete(path)
+              } else {
+                newSelection.add(path)
+              }
+              setSelectedPaths(newSelection)
+            }}
+            onSelectAll={(isSelected) => {
+              if (isSelected) {
+                setSelectedPaths(new Set(previewMoves.map(m => m.source.replace(/\\/g, '/'))))
+              } else {
+                setSelectedPaths(new Set())
+              }
+            }}
+            onToggleGroupSelect={(paths, isSelected) => {
+              const newSelection = new Set(selectedPaths)
+              paths.forEach(path => {
+                if (isSelected) {
+                  newSelection.add(path)
+                } else {
+                  newSelection.delete(path)
+                }
+              })
+              setSelectedPaths(newSelection)
+            }}
+            isProcessing={isProcessing} 
+            onExecute={executeOrganize} 
+            organizeProgress={organizeProgress}
+          />
 
           <LibraryExplorer 
             media={media} 

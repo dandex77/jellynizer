@@ -6,6 +6,7 @@
 mod utils;
 
 use crate::models::{MediaFile, MediaType};
+use serde::Serialize;
 use crate::metadata::MetadataProvider;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -99,6 +100,9 @@ pub struct FileMove {
     pub destination: PathBuf,
     pub relative_destination: PathBuf,
     pub identifiers: std::collections::HashMap<String, String>,
+    pub media_type: MediaType,
+    pub title: Option<String>,
+    pub season: Option<u32>,
 }
 
 /// Organizes media files into the Jellyfin-compliant structure.
@@ -121,55 +125,61 @@ where F: Fn(usize, usize, &PathBuf) {
                     .unwrap_or(&dest_path)
                     .to_path_buf();
 
-                moves.push(FileMove {
-                    source: file.path.clone(),
-                    destination: dest_path.clone(),
-                    relative_destination,
-                    identifiers: file.identifiers.clone(),
-                });
-            }
+                 moves.push(FileMove {
+                     source: file.path.clone(),
+                     destination: dest_path.clone(),
+                     relative_destination,
+                     identifiers: file.identifiers.clone(),
+                     media_type: file.media_type,
+                     title: file.title.clone(),
+                     season: file.season,
+                 });
+             }
 
             // 2. Handle companion files (subtitles, etc.)
-            if let Some(parent_dir) = file.path.parent() {
-                if let Ok(entries) = fs::read_dir(parent_dir) {
-                    for entry in entries.flatten() {
-                        let other_path = entry.path();
-                        
-                        // Skip if it's the media file itself or a directory
-                        if other_path == file.path || other_path.is_dir() {
-                            continue;
-                        }
+             if let Some(parent_dir) = file.path.parent() {
+                 if let Ok(entries) = fs::read_dir(parent_dir) {
+                     for entry in entries.flatten() {
+                         let other_path = entry.path();
+                         
+                         // Skip if it's the media file itself or a directory
+                         if other_path == file.path || other_path.is_dir() {
+                             continue;
+                         }
 
-                        // Check if it's a companion
-                        if is_companion(&file.path, &other_path) {
-                            // Determine the destination for the companion
-                            let dest_dir = dest_path.parent().unwrap_or(&base_dir);
-                            
-                            // Determine the new filename for the companion
-                            // If it has the same stem as the media file, we use the media file's organized name but with the companion's extension
-                            let extension = other_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                            let new_file_name = if has_same_stem(&file.path, &other_path) {
-                                // Use the organized filename of the media file, but with this file's extension
-                                // Note: dest_path is the full path of the organized media file
-                                let media_stem = dest_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                                format!("{}.{}", media_stem, extension)
-                            } else {
-                                // Fallerback to original filename
-                                other_path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string()
-                            };
+                         // Check if it's a companion
+                         if is_companion(&file.path, &other_path) {
+                             // Determine the destination for the companion
+                             let dest_dir = dest_path.parent().unwrap_or(&base_dir);
+                             
+                             // Determine the new filename for the companion
+                             // If it has the same stem as the media file, we use the media file's organized name but with the companion's extension
+                             let extension = other_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                             let new_file_name = if has_same_stem(&file.path, &other_path) {
+                                 // Use the organized filename of the media file, but with this file's extension
+                                 // Note: dest_path is the full path of the organized media file
+                                 let media_stem = dest_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                 format!("{}.{}", media_stem, extension)
+                             } else {
+                                 // Fallerback to original filename
+                                 other_path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string()
+                             };
 
-                            let companion_dest = dest_dir.join(new_file_name);
+                             let companion_dest = dest_dir.join(new_file_name);
 
-                            if other_path != companion_dest {
-                                let relative_destination = companion_dest.strip_prefix(&*base_dir)
-                                    .unwrap_or(&companion_dest)
-                                    .to_path_buf();
+                             if other_path != companion_dest {
+                                 let relative_destination = companion_dest.strip_prefix(&*base_dir)
+                                     .unwrap_or(&companion_dest)
+                                     .to_path_buf();
 
                                  moves.push(FileMove {
                                      source: other_path,
                                      destination: companion_dest,
                                      relative_destination,
                                      identifiers: file.identifiers.clone(),
+                                     media_type: file.media_type,
+                                     title: file.title.clone(),
+                                     season: file.season,
                                  });
                              }
                          }

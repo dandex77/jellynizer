@@ -15,8 +15,7 @@ pub fn extract_identifiers(name: &str) -> HashMap<String, String> {
         "1080p", "720p", "480p", "bluray", "web-dl", "webrip", "brrip", 
         "x264", "x265", "h264", "h265", "amzn", "dcp", "remux", "dts", "ac3",
         "web", "dl", "rip", "hd", "sd", "repack", "mkv", "mp4", "avi", "mov",
-        "5.1", "7.1", "hdrip", "dvdrip", "cam", "ts", "tc", "scr", "subbed",
-        "dubbed", "uncut"
+        "5.1", "7.1", "subbed", "dubbed", "uncut"
     ];
 
     // This regex captures content within brackets ([tag]) or dot-separated provider-id pairs (.provider-id.).

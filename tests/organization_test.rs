@@ -111,22 +111,21 @@ async fn test_the_capture_organization() {
     // In this test, the files are classified as TV Shows. 
     // The TV show organization uses file.year if available.
     
-    // Let's check if the destination paths match the new pattern.
-    // Since we haven't explicitly set `year` on `media_files` in the test (only `title`, `season`, `episode` are set by `classify_media`), 
-    // and the regex for TV shows doesn't extract year, `file.year` will be `None` unless enriched.
-    
     let s1_move = moves.iter().find(|m| m.source == s1_file.path).expect("No move found for S01E01");
     
-    // The new format for filename is: "Title S{02}E{02}.extension"
-    // For S01E01, it should be "The Capture S01E01.mkv"
-    // The extension is mkv.
-    let expected_filename = format!("{} S{:02}E{:02}.{}", "The Capture", 1, 1, "mkv");
+    // The new format for filename is: "Title S{02}E{02}[tags].extension"
+    // For S01E01, it should start with "The Capture S01E01" and end with ".mkv"
+    let expected_base_name = format!("{} S{:02}E{:02}", "The Capture", 1, 1);
+    let dest_path_str = s1_move.destination.to_str().unwrap();
     
-    let expected_s1_path = target_dir
+    assert!(dest_path_str.contains(&expected_base_name), "Destination path '{}' does not contain expected base name '{}'", dest_path_str, expected_base_name);
+    assert!(dest_path_str.contains("[HEVC-Vyndros]"), "Destination path '{}' does not contain [HEVC-Vyndros]", dest_path_str);
+    assert!(dest_path_str.ends_with(".mkv"), "Destination path '{}' does not end with .mkv", dest_path_str);
+    
+    // Also verify it's in the right directory
+    let expected_dir = target_dir
         .join("Shows")
         .join("The Capture")
-        .join("Season 01")
-        .join(expected_filename);
-    
-    assert_eq!(s1_move.destination, expected_s1_path);
+        .join("Season 01");
+    assert_eq!(s1_move.destination.parent().unwrap(), &expected_dir);
 }

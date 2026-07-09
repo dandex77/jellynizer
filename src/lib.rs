@@ -6,3 +6,4 @@ pub mod metadata;
 pub mod models;
 pub mod organizer;
 pub mod scanner;
+pub mod utils;

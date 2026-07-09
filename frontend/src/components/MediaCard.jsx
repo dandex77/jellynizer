@@ -23,19 +23,34 @@ const MediaCard = ({ file }) => {
         {file.title || 'Unknown Title'}
       </h3>
       
-      <div className="space-y-3 text-sm text-gray-400">
-        <div className="flex items-center gap-2">
-          <span className="text-xs opacity-50">📅</span>
-          <span className="font-medium">{file.year || 'N/A'}</span>
-          {file.media_type === 'TvShow' && (
-            <>
-              <span className="opacity-30">•</span>
-              <span className="font-medium text-xs">S{file.season} • E{file.episode}</span>
-            </>
-          )}
-        </div>
-        
-        <div className="flex items-start gap-2 pt-1">
+       <div className="space-y-3 text-sm text-gray-400">
+         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+           <div className="flex items-center gap-2">
+             <span className="text-xs opacity-50">📅</span>
+             <span className="font-medium">{file.year || 'N/A'}</span>
+             {file.media_type === 'TvShow' && (
+               <>
+                 <span className="opacity-30">•</span>
+                 <span className="font-medium text-xs">S{file.season} • E{file.episode}</span>
+               </>
+             )}
+           </div>
+
+           {file.identifiers && Object.keys(file.identifiers).length > 0 && (
+             <div className="flex flex-wrap gap-1 ml-2">
+               {Object.entries(file.identifiers).map(([provider, id]) => (
+                 <span 
+                   key={provider} 
+                   className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400/80 border border-purple-500/20 font-mono"
+                 >
+                   {provider.toUpperCase()}: {id}
+                 </span>
+               ))}
+             </div>
+           )}
+         </div>
+         
+         <div className="flex items-start gap-2 pt-1">
           <span className="text-xs opacity-50">📂</span>
           <p className="truncate text-xs opacity-50 font-mono leading-relaxed break-all">{file.path}</p>
         </div>

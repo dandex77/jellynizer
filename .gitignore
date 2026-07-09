@@ -2,3 +2,7 @@
 /test_media
 /shows
 /movies
+create_test_media.sh
+
+*.sh
+*.py

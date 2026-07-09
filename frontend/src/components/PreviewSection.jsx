@@ -82,17 +82,27 @@ const PreviewSection = ({ previewMoves, isProcessing, onExecute, organizeProgres
                   <p className="text-blue-400 truncate font-mono text-xs sm:text-sm group-hover:text-blue-300">
                     {move.source.split(/[/\\]/).pop()}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-purple-500/40 text-xs">➞</span>
-                    <div className="flex flex-col min-w-0">
-                      <p className="text-emerald-400 truncate font-mono text-xs sm:text-sm group-hover:text-emerald-300">
-                        {move.destination.split(/[/\\]/).pop()}
-                      </p>
-                      <p className="text-gray-500 text-[10px] truncate font-mono">
-                        {move.relative_destination.split(/[/\\]/).join('/')}
-                      </p>
-                    </div>
-                  </div>
+                 <div className="flex items-center gap-2">
+                   <span className="text-purple-500/40 text-xs">➞</span>
+                   <div className="flex flex-col min-w-0">
+                     <p className="text-emerald-400 truncate font-mono text-xs sm:text-sm group-hover:text-emerald-300">
+                       {move.destination.split(/[/\\]/).pop()}
+                     </p>
+                     <div className="flex flex-wrap gap-1 mt-1">
+                       {move.identifiers && Object.entries(move.identifiers).map(([provider, id]) => (
+                         <span 
+                           key={provider} 
+                           className="text-[8px] px-1 py-0 rounded bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20 font-mono"
+                         >
+                           {provider.toUpperCase()}:{id}
+                         </span>
+                       ))}
+                     </div>
+                     <p className="text-gray-500 text-[10px] truncate font-mono">
+                       {move.relative_destination.split(/[/\\]/).join('/')}
+                     </p>
+                   </div>
+                 </div>
                 </div>
               </div>
             ))}

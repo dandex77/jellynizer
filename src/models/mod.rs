@@ -3,6 +3,7 @@
 //! This module contains the core data structures used throughout the application
 //! to represent media files and their metadata.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use serde::Serialize;
 
@@ -32,6 +33,8 @@ pub struct MediaFile {
     pub season: Option<u32>,
     /// The episode number (for TV shows).
     pub episode: Option<u32>,
+    /// Metadata identifiers (e.g., {"tmdbid": "680", "imdbid": "1234"}).
+    pub identifiers: HashMap<String, String>,
 }
 
 impl MediaFile {
@@ -44,6 +47,7 @@ impl MediaFile {
             year: None,
             season: None,
             episode: None,
+            identifiers: HashMap::new(),
         }
     }
 }

@@ -96,6 +96,7 @@ pub struct FileMove {
     pub source: PathBuf,
     pub destination: PathBuf,
     pub relative_destination: PathBuf,
+    pub identifiers: std::collections::HashMap<String, String>,
 }
 
 /// Organizes media files into the Jellyfin-compliant structure.
@@ -123,6 +124,7 @@ where F: Fn(usize, usize, &PathBuf) {
                     source: file.path.clone(),
                     destination: dest_path.clone(),
                     relative_destination,
+                    identifiers: file.identifiers.clone(),
                 });
             }
 
@@ -162,20 +164,21 @@ where F: Fn(usize, usize, &PathBuf) {
                                     .unwrap_or(&companion_dest)
                                     .to_path_buf();
 
-                                moves.push(FileMove {
-                                    source: other_path,
-                                    destination: companion_dest,
-                                    relative_destination,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if !dry_run {
+                                 moves.push(FileMove {
+                                     source: other_path,
+                                     destination: companion_dest,
+                                     relative_destination,
+                                     identifiers: file.identifiers.clone(),
+                                 });
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+     }
+ 
+     if !dry_run {
         for m in &moves {
             match operation {
                 Operation::Move => {
@@ -226,6 +229,16 @@ pub fn calculate_destination(file: &MediaFile, destination_map: &std::collection
     let title = file.title.as_ref()?;
     let extension = file.path.extension()?.to_str()?;
     
+    // Construct the tag string from identifiers, e.g., "[tmdbid-123][imdbid-456]"
+    let mut tag_suffix = String::new();
+    for (provider, id) in &file.identifiers {
+        if id == provider {
+            tag_suffix.push_str(&format!("[{}]", provider));
+        } else {
+            tag_suffix.push_str(&format!("[{}-{}]", provider, id));
+        }
+    }
+
     match file.media_type {
         MediaType::Movie => {
             let year_str = file.year.map(|y| y.to_string()).unwrap_or_default();
@@ -242,7 +255,7 @@ pub fn calculate_destination(file: &MediaFile, destination_map: &std::collection
                 .unwrap_or(&fallback);
 
             let dest_dir = base_dir.join(&folder_name);
-            let file_name = format!("{}.{}", folder_name, extension);
+            let file_name = format!("{}{}.{}", folder_name, tag_suffix, extension);
             Some((dest_dir.join(file_name), base_dir.clone()))
         }
         MediaType::TvShow => {
@@ -257,8 +270,8 @@ pub fn calculate_destination(file: &MediaFile, destination_map: &std::collection
             };
             let season_folder = format!("Season {:02}", season);
             let file_name = format!(
-                "{} S{:02}E{:02}.{}",
-                title, season, episode, extension
+                "{} S{:02}E{:02}{}.{}",
+                title, season, episode, tag_suffix, extension
             );
 
             // Use 'shows' key from destination_map if available, otherwise fallback to current logic

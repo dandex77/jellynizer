@@ -2,20 +2,22 @@
  * Main Application component for Jellynizer.
  * Coordinates state management and layout.
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import Header from './components/Header'
 import LibraryExplorer from './components/LibraryExplorer'
 import PreviewSection from './components/PreviewSection'
 import ConfirmationDialog from './components/ConfirmationDialog'
 import SuccessDialog from './components/SuccessDialog'
+import ProgressDialog from './components/ProgressDialog'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 function App() {
-  const [media, setMedia] = useState([])
+   const [media, setMedia] = useState([])
    const [isScanning, setIsScanning] = useState(false)
    const [isProcessing, setIsProcessing] = useState(false)
+   const [isOrganizing, setIsOrganizing] = useState(false)
    const [previewMoves, setPreviewMoves] = useState([])
    const [organizeProgress, setOrganizeProgress] = useState({
      status: 'Idle',
@@ -23,6 +25,11 @@ function App() {
      total: 0,
      current_file: null
    })
+   const organizeProgressRef = useRef(organizeProgress)
+
+   useEffect(() => {
+     organizeProgressRef.current = organizeProgress
+   }, [organizeProgress])
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'movies' | 'shows'
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false)
@@ -49,11 +56,28 @@ function App() {
    const fetchOrganizeStatus = async () => {
      try {
        const response = await axios.get(`${API_BASE}/organize-status`)
-       setOrganizeProgress(response.data)
-       if (response.data.status === 'Running') {
+       const newProgress = response.data
+
+       if (newProgress.status === 'Running') {
+         setIsOrganizing(true)
          setIsProcessing(true)
-       } else if (response.data.status !== 'Running') {
-         setIsProcessing(false)
+         // If we are already in an active organization session (e.g. via SSE),
+         // don't overwrite the detailed progress to prevent the "0% bug" 
+         // caused by polling potentially older state.
+         if (!isOrganizing) {
+           setOrganizeProgress(newProgress)
+         } else {
+           setOrganizeProgress(prev => ({
+             ...prev,
+             status: newProgress.status
+           }))
+         }
+       } else {
+         setOrganizeProgress(newProgress)
+         setIsOrganizing(false)
+         if (newProgress.status !== 'Running') {
+           setIsProcessing(false)
+         }
        }
      } catch (err) {
        console.error('Failed to fetch organize status', err)
@@ -102,13 +126,15 @@ function App() {
     }
   }
 
-   const executeOrganize = async () => {
-     try {
-       setError(null)
-       setIsProcessing(true)
-       
-       // 1. Start the process
-       const response = await axios.post(`${API_BASE}/execute`)
+    const executeOrganize = async () => {
+      try {
+        setError(null)
+        setIsProcessing(true)
+        setIsOrganizing(true)
+        setOrganizeProgress(prev => ({ ...prev, status: 'Running' }))
+        
+        // 1. Start the process
+        const response = await axios.post(`${API_BASE}/execute`)
        
        if (response.data.status === 'success') {
          // 2. Setup SSE to listen for progress
@@ -125,10 +151,8 @@ function App() {
 
          eventSource.onerror = () => {
            eventSource.close()
-           if (isProcessing) {
-             // If we can't connect to SSE, we'll rely on polling or just error out
-             setIsProcessing(false)
-           }
+           setIsOrganizing(false)
+           setIsProcessing(false)
          }
 
          // 3. Wait for completion via polling or just wait for the SSE to finish
@@ -139,7 +163,7 @@ function App() {
          
          await new Promise((resolve) => {
            const checkInterval = setInterval(() => {
-             if (organizeProgress.status === 'Completed' || organizeProgress.status === 'Failed') {
+             if (organizeProgressRef.current.status === 'Completed' || organizeProgressRef.current.status === 'Failed') {
                clearInterval(checkInterval)
                resolve(true)
              }
@@ -151,14 +175,17 @@ function App() {
          await triggerScan()
          setSuccessMessage(`Successfully moved files!`)
          setIsSuccessDialogOpen(true)
+         setIsOrganizing(false)
          eventSource.close()
        } else {
          setError(response.data.message)
          setIsProcessing(false)
+         setIsOrganizing(false)
        }
      } catch (err) {
        setError('Failed to execute organization')
        setIsProcessing(false)
+       setIsOrganizing(false)
      }
    }
  
@@ -198,14 +225,21 @@ function App() {
            organizeProgress={organizeProgress}
          />
 
-        <LibraryExplorer 
-          media={media} 
-          filter={filter} 
-          setFilter={setFilter} 
-        />
-      </div>
+          <LibraryExplorer 
+            media={media} 
+            filter={filter} 
+            setFilter={setFilter} 
+          />
+        </div>
 
-      <SuccessDialog
+        <ProgressDialog
+          isOpen={isOrganizing}
+          title="Organizing Media"
+          message="Reorganizing your library into the Jellyfin structure..."
+          progress={organizeProgress}
+        />
+  
+        <SuccessDialog
         isOpen={isSuccessDialogOpen}
         title="Organization Complete"
         message={successMessage}

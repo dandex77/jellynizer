@@ -9,6 +9,8 @@ use crate::models::{MediaFile, MediaType};
 use crate::metadata::MetadataProvider;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 use tracing::{info, warn};
 use crate::organizer::utils::{TV_SHOW_RE, MOVIE_RE, clean_name, extract_title_from_parent, is_companion, has_same_stem};
 
@@ -112,7 +114,6 @@ where F: Fn(usize, usize, &PathBuf) {
     let mut moves = Vec::new();
 
     for (index, file) in media_files.iter().enumerate() {
-        on_progress(index + 1, media_files.len(), &file.path);
         if let Some((dest_path, base_dir)) = calculate_destination(file, destination_map) {
             // 1. Handle the primary media file
             if file.path != dest_path {
@@ -179,7 +180,8 @@ where F: Fn(usize, usize, &PathBuf) {
      }
  
      if !dry_run {
-        for m in &moves {
+        for (index, m) in moves.iter().enumerate() {
+            on_progress(index + 1, moves.len(), &m.source);
             match operation {
                 Operation::Move => {
                     info!("Executing move: {:?} -> {:?}", m.source, m.destination);
@@ -217,6 +219,7 @@ where F: Fn(usize, usize, &PathBuf) {
                     }
                 }
             }
+            thread::sleep(Duration::from_millis(500));
         }
     }
 

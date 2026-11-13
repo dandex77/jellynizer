@@ -2,7 +2,7 @@
  * Main Application component for Jellynizer.
  * Coordinates state management and layout.
  */
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import Header from './components/Header'
 import LibraryExplorer from './components/LibraryExplorer'
@@ -125,6 +125,14 @@ function App() {
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  const categorizeMedia = async (categorization) => {
+    const response = await axios.post(`${API_BASE}/media/categorize`, categorization)
+    if (response.data.status !== 'success') {
+      throw new Error(response.data.message || 'Failed to categorize media')
+    }
+    await fetchMedia()
   }
 
     const executeOrganize = async () => {
@@ -260,6 +268,7 @@ function App() {
             media={media} 
             filter={filter} 
             setFilter={setFilter} 
+            onCategorize={categorizeMedia}
           />
         </div>
 

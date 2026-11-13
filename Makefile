@@ -18,7 +18,7 @@ test: ## Run all backend tests
 	cargo test
 
 docker-build: ## Build the Docker image
-	docker build -t jellynizer:latest .
+	docker build -t jellynizer:latest . --no-cache
 
 docker-up: ## Run the project with Docker Compose
 	docker-compose up -d

@@ -5,10 +5,10 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Represents the type of media file identified.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaType {
     /// A movie file.
     Movie,

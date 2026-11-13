@@ -68,6 +68,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/organize-status", get(get_organize_status))
         .route("/organize-events", get(organize_events))
         .route("/media", get(get_media))
+        .route("/media/categorize", post(categorize_media))
         .route("/status", get(get_status))
         .with_state(state)
 }
@@ -237,6 +238,72 @@ async fn get_media(
     Json(files.clone())
 }
 
+#[derive(Deserialize)]
+struct CategorizeMediaRequest {
+    path: String,
+    media_type: crate::models::MediaType,
+    title: String,
+    year: Option<u32>,
+    season: Option<u32>,
+    episode: Option<u32>,
+}
+
+/// Endpoint to manually categorize a file that automatic classification could not identify.
+async fn categorize_media(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CategorizeMediaRequest>,
+) -> Json<serde_json::Value> {
+    let title = payload.title.trim();
+    if title.is_empty() {
+        return Json(serde_json::json!({
+            "status": "error",
+            "message": "A title is required"
+        }));
+    }
+
+    let (season, episode) = match payload.media_type {
+        crate::models::MediaType::Movie => (None, None),
+        crate::models::MediaType::TvShow => match (payload.season, payload.episode) {
+            (Some(season), Some(episode)) if season > 0 && episode > 0 => {
+                (Some(season), Some(episode))
+            }
+            _ => {
+                return Json(serde_json::json!({
+                    "status": "error",
+                    "message": "A valid season and episode are required for TV shows"
+                }));
+            }
+        },
+        crate::models::MediaType::Unknown => {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": "Choose Movie or TvShow"
+            }));
+        }
+    };
+
+    let mut files = state.discovered_files.write().unwrap();
+    let Some(file) = files.iter_mut().find(|file| {
+        file.path.to_string_lossy() == payload.path && file.media_type == crate::models::MediaType::Unknown
+    }) else {
+        return Json(serde_json::json!({
+            "status": "error",
+            "message": "Unknown media file not found"
+        }));
+    };
+
+    file.media_type = payload.media_type;
+    file.title = Some(title.to_owned());
+    file.year = payload.year;
+    file.season = season;
+    file.episode = episode;
+
+    Json(serde_json::json!({
+        "status": "success",
+        "message": "Media categorized"
+    }))
+}
+
 /// Endpoint to check the current status of the application.
 async fn get_status(
     State(state): State<Arc<AppState>>,
@@ -274,4 +341,57 @@ async fn organize_events(
     };
 
     Sse::new(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::MediaType;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn categorizing_unknown_file_sets_type_and_metadata() {
+        let path = PathBuf::from("/source/episode.mkv");
+        let (organize_tx, _) = broadcast::channel(10);
+        let mut destination_dirs = HashMap::new();
+        destination_dirs.insert("shows".to_string(), PathBuf::from("/shows"));
+        let state = Arc::new(AppState {
+            source_dirs: Vec::new(),
+            destination_dirs,
+            discovered_files: RwLock::new(vec![MediaFile::new(path.clone(), MediaType::Unknown)]),
+            is_scanning: AtomicBool::new(false),
+            run_automatically: false,
+            operation: Operation::Move,
+            organize_progress: RwLock::new(OrganizeProgress {
+                status: OrganizeStatus::Idle,
+                current: 0,
+                total: 0,
+                current_file: None,
+            }),
+            organize_tx,
+        });
+
+        let result = categorize_media(
+            State(Arc::clone(&state)),
+            Json(CategorizeMediaRequest {
+                path: path.to_string_lossy().into_owned(),
+                media_type: MediaType::TvShow,
+                title: "Example Show".to_string(),
+                year: Some(2024),
+                season: Some(2),
+                episode: Some(3),
+            }),
+        )
+        .await;
+
+        assert_eq!(result.0["status"], "success");
+        let files = state.discovered_files.read().unwrap();
+        let file = &files[0];
+        assert_eq!(file.media_type, MediaType::TvShow);
+        assert_eq!(file.title.as_deref(), Some("Example Show"));
+        assert_eq!(file.year, Some(2024));
+        assert_eq!(file.season, Some(2));
+        assert_eq!(file.episode, Some(3));
+        assert!(organizer::calculate_destination(file, &state.destination_dirs).is_some());
+    }
 }
